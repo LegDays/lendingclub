@@ -17,37 +17,37 @@ getRawDataFromLCLink <- function(aLink) {
   return(theRawData)
 }
 
-getOfferedNotesAndNonPolicyLoansFromSingleLink <- function(aLink) {
+getLoansFromSingleLink <- function(aLink) {
   myRawIssuedLoansData <- getRawDataFromLCLink(aLink)
   
   myIndexOfNotesOffered <- which(grepl("^Notes offered by Prospectus", myRawIssuedLoansData[, 1]))
   myIndexOfLoansNotMeeting <- which(grepl("^Loans that do not meet the credit policy", myRawIssuedLoansData[, 1]))
   myIndexOfTotalFunded <- which(grepl("^Total amount funded in policy code 1", myRawIssuedLoansData[, 1]))
   
-  myOfferedNotesIndices <- (myIndexOfNotesOffered + 2):(myIndexOfLoansNotMeeting - 1)
+  myLoansIndices <- (myIndexOfNotesOffered + 2):(myIndexOfLoansNotMeeting - 1)
   myNonPolicyLoansIndices <- (myIndexOfLoansNotMeeting + 1):(myIndexOfTotalFunded - 1)
   
   myColumnNames <- unlist(myRawIssuedLoansData[myIndexOfNotesOffered + 1,])
   
-  theOfferedNotes <- myRawIssuedLoansData[myOfferedNotesIndices,]
-  colnames(theOfferedNotes) <- myColumnNames
+  theLoans <- myRawIssuedLoansData[myLoansIndices,]
+  colnames(theLoans) <- myColumnNames
   
   theNonPolicyLoans <- myRawIssuedLoansData[myNonPolicyLoansIndices,]
   colnames(theNonPolicyLoans) <- myColumnNames
   
-  return(list(theOfferedNotes, theNonPolicyLoans))
+  return(list(theLoans, theNonPolicyLoans))
 }
 
-getOfferedNotesAndNonPolicyLoans <- function(aLinks) {
-  theOfferedNotes <- data.frame()
+getLoans <- function(aLinks) {
+  theLoans <- data.frame()
   theNonPolicyLoans <- data.frame()
   
   for(myLink in aLinks) {
-    myLCLoanOutput <- getOfferedNotesAndNonPolicyLoansFromSingleLink(myLink)
-    theOfferedNotes <- rbind(theOfferedNotes, myLCLoanOutput[[1]])
+    myLCLoanOutput <- getLoansFromSingleLink(myLink)
+    theLoans <- rbind(theLoans, myLCLoanOutput[[1]])
     theNonPolicyLoans <- rbind(theNonPolicyLoans, myLCLoanOutput[[2]])
   }
-  return(list(theOfferedNotes, theNonPolicyLoans))
+  return(list(theLoans, theNonPolicyLoans))
 }
 
 getRejectStatsFromSingleLink <- function(aLink) {
@@ -73,4 +73,15 @@ getRejectStats <- function(aLinks) {
     theRejectStats <- rbind(theRejectStats, myRejectStats)
   }
   return(theRejectStats)
+}
+
+transformLoans <- function(aLoans) {
+  aLoans$issue_d <- sapply(aLoans$issue_d, function(x) as.numeric(as.POSIXct(x, format="%Y-%m-%d")))
+  aLoans$last_pymnt_d <- sapply(aLoans$last_pymnt_d, function(x) as.numeric(as.POSIXct(x, format="%Y-%m-%d")))
+  aLoans$int_rate <- sapply(aLoans$int_rate, function(x) as.numeric(sub("%", "", x)) * .01)
+  aLoans$term <- sapply(aLoans$term, function(x) as.numeric(sub(" months", "", x)) / 12)
+  aLoans$funded_amnt <- sapply(aLoans$funded_amnt, function(x) as.numeric(x))
+  aLoans$total_pymnt_inv <- sapply(aLoans$total_pymnt_inv, function(x) as.numeric(x))
+  aLoans$total_pymnt <- sapply(aLoans$total_pymnt, function(x) as.numeric(x))
+  return(aLoans)
 }
