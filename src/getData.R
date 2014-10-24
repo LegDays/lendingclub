@@ -29,11 +29,13 @@ getLoansFromSingleLink <- function(aLink) {
   
   myColumnNames <- unlist(myRawIssuedLoansData[myIndexOfNotesOffered + 1,])
   
-  theLoans <- myRawIssuedLoansData[myLoansIndices,]
-  colnames(theLoans) <- myColumnNames
+  myLoans <- myRawIssuedLoansData[myLoansIndices,]
+  colnames(myLoans) <- myColumnNames
+  theLoans <- transformLoans(myLoans)
   
-  theNonPolicyLoans <- myRawIssuedLoansData[myNonPolicyLoansIndices,]
-  colnames(theNonPolicyLoans) <- myColumnNames
+  myNonPolicyLoans <- myRawIssuedLoansData[myNonPolicyLoansIndices,]
+  colnames(myNonPolicyLoans) <- myColumnNames
+  theNonPolicyLoans <- transformLoans(myNonPolicyLoans)
   
   return(list(theLoans, theNonPolicyLoans))
 }
@@ -75,13 +77,83 @@ getRejectStats <- function(aLinks) {
   return(theRejectStats)
 }
 
+transformColumnToNumeric <- function(aColumn) {
+  theColumn <- as.numeric(as.vector(aColumn))
+  return(theColumn)
+}
+
+transformColumnToPOSIX <- function(aColumn) {
+  theColumn <- sapply(aColumn, function(x) as.numeric(as.POSIXct(x, format="%Y-%m-%d")))
+  return(theColumn)
+}
+
+transformColumnToDateTimePOSIX <- function(aColumn) {
+  theColumn <- sapply(aColumn, function(x) as.numeric(as.POSIXct(x, format="%Y-%m-%d %H:%M")))
+  return(theColumn)
+}
+
+transformColumnFromPercentage <- function(aColumn) {
+  theColumn <- sapply(aColumn, function(x) as.numeric(sub("%", "", x)) * .01)
+  return(theColumn)
+}
+
+transformColumnFromMonth <- function(aColumn) {
+  myMonthsToSecondsFactor <- 30.5 * 24 * 60 * 60
+  theColumn <- sapply(aColumn, function(x) as.numeric(sub(" months", "", x)) * myMonthsToSecondsFactor)
+  return(theColumn)
+}
+
+transformColumnFromYear <- function(aColumn) {
+  myYearsToSecondsFactor <- 365.25 * 24 * 60 * 60
+  theColumn <- sapply(aColumn, function(x) as.numeric(gsub("([0-9]+).*$", "\\1", x)) * myYearsToSecondsFactor)
+  return(theColumn)
+}
+
+transformColumns <- function(aLoans, aColumnNames, aTransformation) {
+  print(paste("Transforming", aTransformation, "columns..."))
+  for(i in 1:length(aColumnNames)) {
+    myColumnName <- aColumnNames[i]
+    if(aTransformation == "numeric") {
+      aLoans[, myColumnName] <- transformColumnToNumeric(aLoans[, myColumnName])
+    } else if(aTransformation == "date") {
+      aLoans[, myColumnName] <- transformColumnToPOSIX(aLoans[, myColumnName])
+    } else if(aTransformation == "datetime") {
+      aLoans[, myColumnName] <- transformColumnToDateTimePOSIX(aLoans[, myColumnName])
+    } else if(aTransformation == "percentage") {
+      aLoans[, myColumnName] <- transformColumnFromPercentage(aLoans[, myColumnName])
+    } else if(aTransformation == "month") {
+      aLoans[, myColumnName] <- transformColumnFromMonth(aLoans[, myColumnName])
+    } else if(aTransformation == "year") {
+      aLoans[, myColumnName] <- transformColumnFromYear(aLoans[, myColumnName])
+    } else {
+      stop("requested transformation is not available")
+    }
+    print(paste(i, "of", length(aColumnNames), "done."))
+  }
+  return(aLoans)
+}
+
 transformLoans <- function(aLoans) {
-  aLoans$issue_d <- sapply(aLoans$issue_d, function(x) as.numeric(as.POSIXct(x, format="%Y-%m-%d")))
-  aLoans$last_pymnt_d <- sapply(aLoans$last_pymnt_d, function(x) as.numeric(as.POSIXct(x, format="%Y-%m-%d")))
-  aLoans$int_rate <- sapply(aLoans$int_rate, function(x) as.numeric(sub("%", "", x)) * .01)
-  aLoans$term <- sapply(aLoans$term, function(x) as.numeric(sub(" months", "", x)) / 12)
-  aLoans$funded_amnt <- sapply(aLoans$funded_amnt, function(x) as.numeric(x))
-  aLoans$total_pymnt_inv <- sapply(aLoans$total_pymnt_inv, function(x) as.numeric(x))
-  aLoans$total_pymnt <- sapply(aLoans$total_pymnt, function(x) as.numeric(x))
+  myNumericColumnNames <- c("loan_amnt", "funded_amnt", "funded_amnt_inv", "installment", "annual_inc",
+                            "acc_now_delinq", "dti", "delinq_2yrs", "delinq_amnt", "inq_last_6mths",
+                            "mths_since_last_delinq", "open_acc", "pub_rec", "revol_bal", "total_acc",
+                            "out_prncp", "out_prncp_inv", "total_pymnt", "total_pymnt_inv",
+                            "total_rec_prncp", "total_rec_int", "total_rec_late_fee", "recoveries",
+                            "collection_recovery_fee", "last_pymnt_amnt", "pub_rec_bankruptcies", 
+                            "chargeoff_within_12_mths", "collections_12_mths_ex_med", "tax_liens")
+  myDateColumnNames <- c("accept_d", "exp_d", "list_d", "issue_d", "last_pymnt_d", "next_pymnt_d",
+                         "last_credit_pull_d")
+  myPercentColumnNames <- c("int_rate", "revol_util")
+  myDateTimeColumnNames <- c("earliest_cr_line")
+  myMonthColumns <- c("term")
+  myYearColumns <- c("emp_length")
+  
+  aLoans <- transformColumns(aLoans, myNumericColumnNames, "numeric")
+  aLoans <- transformColumns(aLoans, myDateColumnNames, "date")
+  aLoans <- transformColumns(aLoans, myPercentColumnNames, "percentage")
+  aLoans <- transformColumns(aLoans, myDateTimeColumnNames, "datetime")
+  aLoans <- transformColumns(aLoans, myMonthColumns, "month")
+  aLoans <- transformColumns(aLoans, myYearColumns, "year")
+  
   return(aLoans)
 }
